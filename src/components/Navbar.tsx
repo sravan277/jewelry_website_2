@@ -1,27 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { FaChevronDown } from 'react-icons/fa';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(event.target as Node)) {
+        setIsAccountOpen(false);
+      }
+    };
+
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   useEffect(() => {
     setIsOpen(false);
+    setIsAccountOpen(false);
   }, [location]);
 
   const handleLogout = () => {
@@ -70,31 +83,53 @@ const Navbar = () => {
               </Link>
             ))}
             {user ? (
-              <div className="relative group">
-                <button className="flex items-center space-x-2 text-gray-700 hover:text-primary transition-colors duration-300">
-                  <span>{user.email}</span>
-                  <FaChevronDown className="text-sm" />
+              <div className="relative" ref={accountDropdownRef}>
+                <button
+                  onClick={() => setIsAccountOpen(!isAccountOpen)}
+                  className="flex items-center space-x-2 text-gray-600 hover:text-primary transition-colors"
+                >
+                  <span className="text-xl">
+                    <i className="fas fa-user-circle"></i>
+                  </span>
+                  <span>{user.email?.split('@')[0]}</span>
+                  <span className={`transform transition-transform duration-200 ${isAccountOpen ? 'rotate-180' : ''}`}>
+                    <i className="fas fa-chevron-down"></i>
+                  </span>
                 </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 hidden group-hover:block">
-                  <Link
-                    to="/dashboard"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors duration-300"
-                  >
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/account"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors duration-300"
-                  >
-                    Account Settings
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-300"
-                  >
-                    Sign Out
-                  </button>
-                </div>
+
+                <AnimatePresence>
+                  {isAccountOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"
+                    >
+                      <Link
+                        to="/account"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <i className="fas fa-user mr-2"></i>
+                        Account
+                      </Link>
+                      <Link
+                        to="/settings"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <i className="fas fa-cog mr-2"></i>
+                        Settings
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <i className="fas fa-sign-out-alt mr-2"></i>
+                        Sign Out
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
               <Link to="/auth" className="btn-primary">
@@ -150,12 +185,12 @@ const Navbar = () => {
                   </Link>
                 ))}
                 {user ? (
-                  <button
-                    onClick={handleLogout}
+                  <Link
+                    to="/account"
                     className="block w-full text-left px-4 py-2 text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
-                    Sign Out
-                  </button>
+                    Account
+                  </Link>
                 ) : (
                   <Link
                     to="/auth"
