@@ -1,0 +1,8 @@
+flask>=3.0.0
+flask-cors>=5.0.0
+flask-jwt-extended>=4.6.0
+pymongo>=4.0.0
+pillow>=11.0.0
+opencv-python>=4.0.0
+numpy>=1.21.0
+tensorflow==2.17.1
