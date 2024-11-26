@@ -17,8 +17,8 @@ CORS(app)  # Enable CORS for all routes
 
 # Initialize MongoDB connection
 client = MongoClient("mongodb://localhost:27017/")
-db = client["image_database"]
-collection = db["image_records"]
+db = client["jewelry_website"]
+collection = db["designs"]
 
 # Load the generator model
 generator = tf.keras.models.load_model("C:/SDC/pix2pix_generator_epoch_43.keras")
@@ -93,14 +93,13 @@ def get_images():
 @app.route('/api/delete_image/<image_id>', methods=['DELETE'])
 def delete_image(image_id):
     try:
-        # Delete the image record from MongoDB using the ObjectId
-        result = collection.delete_one({"_id": ObjectId(image_id)})
+        # Delete the image record using UUID as _id
+        result = collection.delete_one({"_id": image_id})
         
         if result.deleted_count > 0:
             return jsonify({"message": "Image deleted successfully"}), 200
         return jsonify({"error": "Image not found"}), 404
     except Exception as e:
-        print(f"Error deleting image: {str(e)}")  # Debug print
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
