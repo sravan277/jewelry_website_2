@@ -16,7 +16,7 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Initialize MongoDB connection
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient('mongodb+srv://vashistap1124:Vashista%4024@cluster0.5tzk8.mongodb.net')
 db = client["jewelry_website"]
 collection = db["designs"]
 
