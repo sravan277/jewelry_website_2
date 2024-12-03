@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import axiosInstance from '../config/axios';
 
 interface User {
-  id: string;
-  name: string;
   email: string;
 }
 
@@ -12,7 +10,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -31,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const response = await axiosInstance.get('/users/me', {
             headers: { Authorization: `Bearer ${storedToken}` },
           });
-          setUser(response.data);
+          setUser({ email: response.data.email });
           setToken(storedToken);
         } catch (error) {
           localStorage.removeItem('token');
@@ -50,33 +48,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
       });
-      console.log('Login response:', response.data);
       
-      if (!response.data.data?.token || !response.data.data?.user) {
+      if (!response.data.data?.token || !response.data.data?.user?.email) {
         throw new Error('Invalid response format from server');
       }
       
       const { token, user } = response.data.data;
       localStorage.setItem('token', token);
       setToken(token);
-      setUser(user);
+      setUser({ email: user.email });
     } catch (error: any) {
       console.error('Login error:', error);
       throw new Error(error.response?.data?.message || 'Login failed');
     }
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (email: string, password: string) => {
     try {
       const response = await axiosInstance.post('/auth/register', {
-        name,
         email,
         password,
       });
       const { token, user } = response.data.data;
       localStorage.setItem('token', token);
       setToken(token);
-      setUser(user);
+      setUser({ email: user.email });
     } catch (error: any) {
       console.error('Register error:', error);
       throw new Error(error.response?.data?.message || 'Registration failed');

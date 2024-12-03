@@ -4,10 +4,13 @@ export interface IDesign extends mongoose.Document {
   title: string;
   description: string;
   category: string;
-  imageUrl: string;
-  cloudinaryId: string;
+  sketchImage: string;
+  generatedImage: string;
+  sketchCloudinaryId: string;
+  generatedCloudinaryId: string;
   user: mongoose.Types.ObjectId;
   status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
 }
 
 const designSchema = new mongoose.Schema(
@@ -27,11 +30,19 @@ const designSchema = new mongoose.Schema(
       required: true,
       enum: ['rings', 'necklaces', 'earrings', 'bracelets', 'other'],
     },
-    imageUrl: {
+    sketchImage: {
       type: String,
       required: true,
     },
-    cloudinaryId: {
+    generatedImage: {
+      type: String,
+      required: true,
+    },
+    sketchCloudinaryId: {
+      type: String,
+      required: true,
+    },
+    generatedCloudinaryId: {
       type: String,
       required: true,
     },

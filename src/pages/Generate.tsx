@@ -2,8 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { FiUpload, FiImage, FiDownload, FiZoomIn, FiStar, FiClock } from 'react-icons/fi';
 import { useDropzone } from 'react-dropzone';
+import { useAuth } from '../context/AuthContext';
 
 const Generate: React.FC = () => {
+  const { user, token } = useAuth();
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -13,6 +15,7 @@ const Generate: React.FC = () => {
   const [showLightbox, setShowLightbox] = useState(false);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
+  const [selection, setSelection] = useState('gold'); 
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -43,6 +46,8 @@ const Generate: React.FC = () => {
     maxSize: 5000000 // 5MB
   });
 
+  
+
   const handleGenerate = async () => {
     try {
       setError(null);
@@ -52,19 +57,69 @@ const Generate: React.FC = () => {
         throw new Error('Please upload an image first');
       }
 
-      // Create form data
+      if (!user?.email) {
+        throw new Error('Please log in to generate designs');
+      }
+
+      console.log('Selected model:', selection);
+      
+      // Send image to backend
+      const serverUrl =
+        selection === 'gold'
+          ? 'http://localhost:4000/api/upload'
+          : selection === 'silver'
+          ? 'http://localhost:4000/api/upload/silver'
+          : 'http://localhost:4000/api/upload/gold-gemstone';
+      
+      console.log('Sending request to:', serverUrl);
+
       const formData = new FormData();
       formData.append('file', image);
+      const userEmail = localStorage.getItem('userEmail');
+      if (!userEmail) {
+        throw new Error('User email not found. Please try logging in again.');
+      }
+      formData.append('email', userEmail);
 
-      // Send image to backend
-      const response = await fetch('http://localhost:4000/api/upload', {
+      const response = await fetch(serverUrl, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate design');
+        // Try to parse error message if available
+        try {
+          const errorData = await response.json();
+          const errorMessage = errorData.error || '';
+          
+          // Check for specific errors
+          if (errorMessage.toLowerCase().includes('high demand') || 
+              errorMessage.toLowerCase().includes('rate limit') || 
+              errorMessage.toLowerCase().includes('resource_exhausted')) {
+            throw new Error('Our service is experiencing high demand. Please try again in about an hour, or try a different model type.');
+          } else if (errorMessage.includes('missing 2 required positional arguments')) {
+            throw new Error('There was an error with your user information. Please try logging out and back in.');
+          } else if (errorMessage.toLowerCase().includes('no model') || 
+                     errorMessage.toLowerCase().includes('model not available')) {
+            throw new Error('The selected model is currently unavailable. Please try a different model type or contact support if the issue persists.');
+          }
+          
+          throw new Error(errorMessage || 'Failed to generate design');
+        } catch (jsonError) {
+          if (jsonError instanceof Error) {
+            throw jsonError; // Re-throw our custom error messages
+          }
+          throw new Error(`Failed to generate design: ${response.statusText}`);
+        }
+      }
+
+      // Check content type to ensure we received an image
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('image/')) {
+        throw new Error('Server did not return an image');
       }
 
       // Convert response to blob and create URL
@@ -147,7 +202,71 @@ const Generate: React.FC = () => {
               {error}
             </motion.div>
           )}
-
+          <div className="mt-6 bg-white/60 backdrop-blur-sm p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Select Model Type</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <label
+                      className={`relative flex flex-col items-center p-4 rounded-xl cursor-pointer transition-all ${
+                        selection === 'gold' 
+                          ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-lg ring-2 ring-purple-600' 
+                          : 'bg-white hover:bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="selection"
+                        value="gold"
+                        checked={selection === 'gold'}
+                        onChange={() => setSelection('gold')}
+                        className="absolute opacity-0"
+                      />
+                      <span className="text-lg font-medium mb-2">Gold</span>
+                      <span className={`text-sm ${selection === 'gold' ? 'text-white/80' : 'text-gray-500'}`}>
+                        Classic gold jewelry
+                      </span>
+                    </label>
+                    <label
+                      className={`relative flex flex-col items-center p-4 rounded-xl cursor-pointer transition-all ${
+                        selection === 'silver' 
+                          ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-lg ring-2 ring-purple-600' 
+                          : 'bg-white hover:bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="selection"
+                        value="silver"
+                        checked={selection === 'silver'}
+                        onChange={() => setSelection('silver')}
+                        className="absolute opacity-0"
+                      />
+                      <span className="text-lg font-medium mb-2">Silver</span>
+                      <span className={`text-sm ${selection === 'silver' ? 'text-white/80' : 'text-gray-500'}`}>
+                        Modern silver designs
+                      </span>
+                    </label>
+                    <label
+                      className={`relative flex flex-col items-center p-4 rounded-xl cursor-pointer transition-all ${
+                        selection === 'gold-gemstone' 
+                          ? 'bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-lg ring-2 ring-purple-600' 
+                          : 'bg-white hover:bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="selection"
+                        value="gold-gemstone"
+                        checked={selection === 'gold-gemstone'}
+                        onChange={() => setSelection('gold-gemstone')}
+                        className="absolute opacity-0"
+                      />
+                      <span className="text-lg font-medium mb-2">Gold Gemstone</span>
+                      <span className={`text-sm ${selection === 'gold-gemstone' ? 'text-white/80' : 'text-gray-500'}`}>
+                        Gold with precious gems
+                      </span>
+                    </label>
+                  </div>
+                </div>
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Input Section */}
             <motion.div
@@ -161,6 +280,7 @@ const Generate: React.FC = () => {
                 transition={{ type: "spring", stiffness: 300 }}
                 onMouseMove={handleMouseMove}
               >
+                
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-pink-500/5 to-blue-500/5" 
                   style={{
                     background: `radial-gradient(circle at ${mouseX}px ${mouseY}px, rgba(139, 92, 246, 0.1), rgba(219, 39, 119, 0.05), rgba(59, 130, 246, 0.05))`
@@ -169,6 +289,8 @@ const Generate: React.FC = () => {
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 text-transparent bg-clip-text mb-6">
                   Upload Your Sketch
                 </h2>
+                
+                
                 <div
                   {...getRootProps()}
                   className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all relative overflow-hidden ${
@@ -177,6 +299,10 @@ const Generate: React.FC = () => {
                       : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
                   }`}
                 >
+                  
+                  
+                  
+
                   <input {...getInputProps()} />
                   <motion.div
                     initial={false}
@@ -232,6 +358,8 @@ const Generate: React.FC = () => {
                     </div>
                   </motion.div>
                 )}
+                
+
                 <div className="mt-6 space-y-6">
                   <div>
                     <label className="block text-lg font-medium text-gray-700 mb-2">

@@ -2,63 +2,79 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiUpload, FiImage, FiGrid, FiClock, FiTrash2, FiX, FiDownload, FiZoomIn } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 interface ImageRecord {
   _id: string;
   sketch_image: string;
   generated_image: string;
-  timestamp?: string;
+  timestamp: string;
+  email?: string;
 }
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [recentUploads, setRecentUploads] = useState<ImageRecord[]>([]);
+  const { user } = useAuth();
+  const [images, setImages] = useState<ImageRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageRecord | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRecentUploads();
-  }, []);
+    fetchUserImages();
+  }, [user]);
 
-  const fetchRecentUploads = async () => {
-    try {
-      const response = await fetch('http://localhost:4000/api/get_images');
-      if (!response.ok) {
-        throw new Error('Failed to fetch images');
-      }
-      const data = await response.json();
-      setRecentUploads(data);
+  const fetchUserImages = async () => {
+    if (!user?.email) {
+      setError('Please log in to view your images');
       setIsLoading(false);
-    } catch (error) {
-      console.error('Error fetching uploads:', error);
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:4000/api/images/my-images?email=${encodeURIComponent(user.email)}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch images');
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setImages(data);
+        setError(null);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error loading images. Please try again later.';
+      setError(errorMessage);
+      console.error('Error fetching images:', err);
+    } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = async (imageId: string) => {
+    if (!user?.email) return;
+
     try {
-      const response = await fetch(`http://localhost:4000/api/delete_image/${imageId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`http://localhost:4000/api/images/${imageId}?email=${encodeURIComponent(user.email)}`, {
+        method: 'DELETE'
       });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        setRecentUploads(prevUploads => 
-          prevUploads.filter(upload => upload._id !== imageId)
-        );
-        setDeleteConfirm(null);
-      } else {
-        console.error('Failed to delete image:', data.error);
-        alert('Failed to delete image. Please try again.');
+
+      if (!response.ok) {
+        throw new Error('Failed to delete image');
       }
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      alert('An error occurred while deleting the image. Please try again.');
+
+      // Remove the deleted image from state
+      setImages(prevImages => prevImages.filter(img => img._id !== imageId));
+      setDeleteConfirm(null);
+      setSelectedImage(null);
+    } catch (err) {
+      console.error('Error deleting image:', err);
+      setError('Failed to delete image. Please try again.');
     }
   };
 
@@ -96,8 +112,8 @@ const Dashboard: React.FC = () => {
   };
 
   const stats = [
-    { icon: <FiUpload className="w-6 h-6" />, label: 'Total Uploads', value: recentUploads.length },
-    { icon: <FiImage className="w-6 h-6" />, label: 'Generated Designs', value: recentUploads.length },
+    { icon: <FiUpload className="w-6 h-6" />, label: 'Total Uploads', value: images.length },
+    { icon: <FiImage className="w-6 h-6" />, label: 'Generated Designs', value: images.length },
     { icon: <FiGrid className="w-6 h-6" />, label: 'Categories', value: 4 },
     { icon: <FiClock className="w-6 h-6" />, label: 'Processing Time', value: '~2s' },
   ];
@@ -182,9 +198,9 @@ const Dashboard: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
             <AnimatePresence>
-              {recentUploads.map((upload) => (
+              {images.map((image) => (
                 <motion.div
-                  key={upload._id}
+                  key={image._id}
                   variants={cardVariants}
                   exit={{ opacity: 0, scale: 0.5 }}
                   className="bg-gray-800/50 backdrop-blur-lg rounded-xl overflow-hidden border border-gray-700/50 
@@ -199,10 +215,10 @@ const Dashboard: React.FC = () => {
                       className="relative overflow-hidden"
                     >
                       <img
-                        src={`data:image/png;base64,${upload.sketch_image}`}
+                        src={`data:image/png;base64,${image.sketch_image}`}
                         alt="Original sketch"
                         className="w-full h-full object-cover cursor-pointer"
-                        onClick={() => setSelectedImage(upload)}
+                        onClick={() => setSelectedImage(image)}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent">
                         <div className="absolute bottom-2 left-2">
@@ -219,10 +235,10 @@ const Dashboard: React.FC = () => {
                       className="relative overflow-hidden"
                     >
                       <img
-                        src={`data:image/png;base64,${upload.generated_image}`}
+                        src={`data:image/png;base64,${image.generated_image}`}
                         alt="Generated design"
                         className="w-full h-full object-cover cursor-pointer"
-                        onClick={() => setSelectedImage(upload)}
+                        onClick={() => setSelectedImage(image)}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent">
                         <div className="absolute bottom-2 left-2">
@@ -236,7 +252,7 @@ const Dashboard: React.FC = () => {
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => downloadImage(upload.generated_image, 'generated')}
+                        onClick={() => downloadImage(image.generated_image, 'generated')}
                         className="p-1.5 bg-purple-500/20 rounded-full hover:bg-purple-500/40 transition-all duration-300"
                       >
                         <FiDownload className="w-4 h-4 text-purple-400" />
@@ -244,7 +260,7 @@ const Dashboard: React.FC = () => {
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => setDeleteConfirm(upload._id)}
+                        onClick={() => setDeleteConfirm(image._id)}
                         className="p-1.5 bg-red-500/20 rounded-full hover:bg-red-500/40 transition-all duration-300"
                       >
                         <FiTrash2 className="w-4 h-4 text-red-500" />
@@ -255,7 +271,7 @@ const Dashboard: React.FC = () => {
                     <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
                       <div className="flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-2 py-1">
                         <FiClock className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs text-gray-300">{formatDate(upload.timestamp || '')}</p>
+                        <p className="text-xs text-gray-300">{formatDate(image.timestamp || '')}</p>
                       </div>
                     </div>
                   </div>

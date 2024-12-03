@@ -8,6 +8,7 @@ const router = express.Router();
 
 // Configure multer for file upload
 const upload = multer({
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 5000000, // 5MB max file size
   },
@@ -19,28 +20,45 @@ const upload = multer({
   },
 });
 
-// Create a new design
-router.post('/', auth, upload.single('image'), async (req, res) => {
+// Create a new design with both sketch and generated images
+router.post('/', auth, upload.fields([
+  { name: 'sketchImage', maxCount: 1 },
+  { name: 'generatedImage', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { title, description, category } = req.body;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-    // Upload image to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file!.path, {
-      folder: 'jewelry_designs',
-    });
+    if (!files.sketchImage || !files.generatedImage) {
+      return res.status(400).json({ message: 'Both sketch and generated images are required' });
+    }
+
+    // Upload both images to Cloudinary
+    const sketchResult = await cloudinary.uploader.upload(
+      `data:${files.sketchImage[0].mimetype};base64,${files.sketchImage[0].buffer.toString('base64')}`,
+      { folder: 'jewelry_designs/sketches' }
+    );
+
+    const generatedResult = await cloudinary.uploader.upload(
+      `data:${files.generatedImage[0].mimetype};base64,${files.generatedImage[0].buffer.toString('base64')}`,
+      { folder: 'jewelry_designs/generated' }
+    );
 
     const design = new Design({
       title,
       description,
       category,
-      imageUrl: result.secure_url,
-      cloudinaryId: result.public_id,
+      sketchImage: sketchResult.secure_url,
+      generatedImage: generatedResult.secure_url,
+      sketchCloudinaryId: sketchResult.public_id,
+      generatedCloudinaryId: generatedResult.public_id,
       user: req.user.id,
     });
 
     await design.save();
     res.status(201).json(design);
   } catch (error) {
+    console.error('Error creating design:', error);
     res.status(500).json({ message: 'Error uploading design' });
   }
 });
@@ -48,9 +66,14 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 // Get all designs for a user
 router.get('/my-designs', auth, async (req, res) => {
   try {
-    const designs = await Design.find({ user: req.user.id }).sort({ createdAt: -1 });
+    const designs = await Design.find({ user: req.user.id })
+      .sort({ createdAt: -1 })
+      .select('-__v')
+      .lean();
+
     res.json(designs);
   } catch (error) {
+    console.error('Error fetching designs:', error);
     res.status(500).json({ message: 'Error fetching designs' });
   }
 });
@@ -101,17 +124,21 @@ router.patch('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const design = await Design.findOne({ _id: req.params.id, user: req.user.id });
-    
+
     if (!design) {
       return res.status(404).json({ message: 'Design not found' });
     }
 
-    // Delete image from Cloudinary
-    await cloudinary.uploader.destroy(design.cloudinaryId);
-    
-    await Design.deleteOne({ _id: design._id });
+    // Delete images from Cloudinary
+    await cloudinary.uploader.destroy(design.sketchCloudinaryId);
+    await cloudinary.uploader.destroy(design.generatedCloudinaryId);
+
+    // Delete design from database
+    await design.deleteOne();
+
     res.json({ message: 'Design deleted successfully' });
   } catch (error) {
+    console.error('Error deleting design:', error);
     res.status(500).json({ message: 'Error deleting design' });
   }
 });

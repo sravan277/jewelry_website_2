@@ -29,8 +29,10 @@ cloudinary.config({
 });
 
 // Connect to MongoDB
+const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jewelry_website';
+
 mongoose
-  .connect(process.env.MONGODB_URI!)
+  .connect(MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
   })
