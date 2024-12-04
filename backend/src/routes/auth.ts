@@ -1,8 +1,9 @@
 import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import { generateToken } from '../middleware/auth';
+import { Types } from 'mongoose';
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.post(
         email,
         password, // Will be hashed by the pre-save hook
         name,
-      });
+      }) as IUser;
 
       await user.save();
 
@@ -66,7 +67,7 @@ router.post(
         data: {
           token,
           user: {
-            id: user._id,
+            id: user._id.toString(),
             email: user.email,
             name: user.name,
           },
@@ -102,7 +103,7 @@ router.post(
       const { email, password } = req.body;
 
       // Find user by email
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email }) as IUser | null;
       if (!user) {
         return res.status(401).json({
           status: 'error',

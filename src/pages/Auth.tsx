@@ -35,6 +35,12 @@ const Auth = () => {
   ];
 
   const registerFields = [
+    {
+      label: 'Name',
+      type: 'text',
+      name: 'name',
+      required: true,
+    },
     ...loginFields,
     {
       label: 'Confirm Password',
@@ -60,7 +66,7 @@ const Auth = () => {
           setTimeout(() => setShakeAnimation(false), 500);
           return;
         }
-        await register(data.email as string, data.password as string);
+        await register(data.email as string, data.password as string, data.name as string);
         localStorage.setItem('userEmail', data.email);
         navigate('/dashboard');
       }

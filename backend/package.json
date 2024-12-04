@@ -11,6 +11,7 @@
   "dependencies": {
     "@types/nodemailer": "^6.4.17",
     "axios": "^1.7.7",
+    "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
@@ -18,7 +19,7 @@
     "express": "^4.18.2",
     "express-validator": "^7.0.1",
     "jsonwebtoken": "^9.0.0",
-    "mongoose": "^7.2.0",
+    "mongoose": "^8.8.3",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.16",
     "openai": "^4.73.0"
@@ -30,7 +31,7 @@
     "@types/jsonwebtoken": "^9.0.2",
     "@types/multer": "^1.4.12",
     "@types/node": "^20.2.3",
-    "nodemon": "^2.0.22",
+    "nodemon": "^3.1.7",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.4"
   }

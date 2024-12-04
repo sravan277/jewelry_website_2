@@ -55,34 +55,6 @@ MODEL_PATHS = {
 # Initialize models dictionary
 models = {}
 
-def load_model_with_retry(model_type, path, max_retries=3, retry_delay=5):
-    """Load a model with retry logic"""
-    for attempt in range(max_retries):
-        try:
-            print(f"\nAttempt {attempt + 1} of {max_retries} to load {model_type} model")
-            if not os.path.exists(path):
-                print(f"Error: Model file not found at {path}")
-                return None
-                
-            print(f"Loading {model_type} model from: {path}")
-            model = tf.keras.models.load_model(path)
-            print(f"Successfully loaded {model_type} model")
-            return model
-            
-        except tf.errors.ResourceExhaustedError as e:
-            if attempt < max_retries - 1:
-                print(f"Resource exhausted, waiting {retry_delay} seconds before retry...")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-            else:
-                print(f"Failed to load {model_type} model after {max_retries} attempts: {str(e)}")
-                return None
-        except Exception as e:
-            print(f"Error loading {model_type} model: {str(e)}")
-            print("Detailed error:")
-            traceback.print_exc()
-            return None
-
 def load_models():
     """Load all models into memory"""
     global models
@@ -94,7 +66,24 @@ def load_models():
     
     # Load each model
     for model_type, path in MODEL_PATHS.items():
-        models[model_type] = load_model_with_retry(model_type, path)
+        try:
+            print(f"\nLoading {model_type} model from: {path}")
+            
+            if not os.path.exists(path):
+                print(f"Error: Model file not found at {path}")
+                models[model_type] = None
+                continue
+                
+            print(f"File exists, attempting to load {model_type} model...")
+            model = tf.keras.models.load_model(path)
+            print(f"Successfully loaded {model_type} model")
+            models[model_type] = model
+            
+        except Exception as e:
+            print(f"Error loading {model_type} model: {str(e)}")
+            print("Detailed error:")
+            traceback.print_exc()
+            models[model_type] = None
     
     # Verify models were loaded
     loaded_models = [model_type for model_type, model in models.items() if model is not None]
@@ -191,19 +180,11 @@ def process_image_with_model(image_array, model_type):
         
     model = models.get(model_type)
     if model is None:
-        # Try to reload the model
-        print(f"Model {model_type} not loaded, attempting to reload...")
-        models[model_type] = load_model_with_retry(model_type, MODEL_PATHS[model_type])
-        model = models.get(model_type)
-        if model is None:
-            raise ValueError(f"Failed to load model {model_type}")
+        raise ValueError(f"Model {model_type} not loaded")
     
     try:
         predicted_image = model(image_array, training=False)
         return (predicted_image[0] + 1) / 2
-    except tf.errors.ResourceExhaustedError as e:
-        print(f"Resource exhausted while processing image with {model_type} model")
-        raise ValueError("The model is currently experiencing high demand. Please try again in a few minutes.")
     except Exception as e:
         print(f"Error processing image with {model_type} model: {str(e)}")
         traceback.print_exc()
