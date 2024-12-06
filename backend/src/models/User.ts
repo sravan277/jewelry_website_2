@@ -6,6 +6,17 @@ export interface IUser extends mongoose.Document {
   email: string;
   password: string;
   name: string;
+  generatedImages: Array<{
+    sketchImage: string;
+    generatedImage: string;
+    sketchImageData: Buffer;
+    generatedImageData: Buffer;
+    title: string;
+    description: string;
+    category: string;
+    status: 'pending' | 'approved' | 'rejected';
+    createdAt: Date;
+  }>;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -28,6 +39,46 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    generatedImages: [{
+      sketchImage: {
+        type: String,
+        required: true,
+      },
+      generatedImage: {
+        type: String,
+        required: true,
+      },
+      sketchImageData: {
+        type: Buffer,
+        required: false,
+      },
+      generatedImageData: {
+        type: Buffer,
+        required: false,
+      },
+      title: {
+        type: String,
+        required: true,
+      },
+      description: {
+        type: String,
+        required: true,
+      },
+      category: {
+        type: String,
+        required: true,
+        enum: ['rings', 'necklaces', 'earrings', 'bracelets', 'other'],
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending',
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      }
+    }],
   },
   {
     timestamps: true,

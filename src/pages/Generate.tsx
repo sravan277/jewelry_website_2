@@ -291,73 +291,39 @@ const Generate: React.FC = () => {
                 </h2>
                 
                 
-                <div
-                  {...getRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all relative overflow-hidden ${
-                    isDragActive
-                      ? 'border-purple-400 bg-purple-50 scale-[0.99]'
-                      : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
-                  }`}
-                >
-                  
-                  
-                  
-
-                  <input {...getInputProps()} />
-                  <motion.div
-                    initial={false}
-                    animate={isDragActive ? { scale: 1.1, rotate: 5 } : { scale: 1, rotate: 0 }}
-                    className="flex flex-col items-center relative z-10"
+                <div className="space-y-6 p-6">
+                  <div
+                    {...getRootProps()}
+                    className={`relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                      isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'
+                    }`}
+                    style={{ minHeight: '400px', width: '100%' }}
                   >
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
-                      <FiUpload className="h-8 w-8 text-white" />
-                    </div>
+                    <input {...getInputProps()} />
                     {imagePreview ? (
-                      <motion.p 
-                        className="text-purple-600 font-medium"
-                        initial={{ scale: 0.8 }}
-                        animate={{ scale: 1 }}
-                      >
-                        Image uploaded! Drop another to replace
-                      </motion.p>
-                    ) : (
-                      <div>
-                        <p className="text-lg font-medium text-purple-600 mb-2">Drop your sketch here</p>
-                        <p className="text-gray-500">or click to select a file</p>
+                      <div className="w-full h-full flex items-center justify-center relative group">
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="max-h-[350px] max-w-[90%] object-contain rounded-lg"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300">
+                          <p className="text-white text-xl font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                            Click or drag to change image
+                          </p>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <FiUpload className="w-16 h-16 text-gray-400 mb-4" />
+                        <p className="text-gray-500 text-lg">
+                          {isDragActive ? 'Drop the image here' : 'Drag & drop an image here, or click to select'}
+                        </p>
+                        <p className="text-sm text-gray-400 mt-2">PNG, JPG up to 5MB</p>
+                      </>
                     )}
-                  </motion.div>
-                  {isDragActive && (
-                    <motion.div 
-                      className="absolute inset-0 bg-purple-500/10"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                    />
-                  )}
+                  </div>
                 </div>
-                {imagePreview && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-6"
-                  >
-                    <div className="relative group">
-                      <img
-                        src={imagePreview}
-                        alt="Uploaded sketch"
-                        className="rounded-xl w-full object-cover shadow-lg cursor-pointer transition-transform group-hover:scale-[1.02]"
-                        onClick={() => setShowLightbox(true)}
-                      />
-                      <motion.div 
-                        className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <FiZoomIn className="w-8 h-8 text-white" />
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                )}
                 
 
                 <div className="mt-6 space-y-6">

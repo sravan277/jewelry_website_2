@@ -33,7 +33,7 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:4000/api/images/my-images?email=${encodeURIComponent(user.email)}`);
+      const response = await fetch(`http://localhost:5000/api/images/${encodeURIComponent(user.email)}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -41,8 +41,8 @@ const Dashboard: React.FC = () => {
       }
 
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setImages(data);
+      if (data.success && Array.isArray(data.images)) {
+        setImages(data.images);
         setError(null);
       } else {
         throw new Error('Invalid response format');

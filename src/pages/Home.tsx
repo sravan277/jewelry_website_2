@@ -336,7 +336,7 @@ const Home = () => {
                       <div className="h-48 bg-gray-100 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300">
                         <div className="relative h-full">
                           <img
-                            src="/images/sketch-input.jpg"
+                            src="/images/x.jpg"
                             alt="Jewelry Sketch Input"
                             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
                           />
@@ -352,7 +352,7 @@ const Home = () => {
                       <div className="h-48 bg-gray-100 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300">
                         <div className="relative h-full">
                           <img
-                            src="/images/ai-processing.jpg"
+                            src="/images/y.jpg"
                             alt="AI Design Processing"
                             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
                           />
@@ -368,7 +368,7 @@ const Home = () => {
                       <div className="h-48 bg-gray-100 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300">
                         <div className="relative h-full">
                           <img
-                            src="/images/final-render.jpg"
+                            src="/images/z.jpg"
                             alt="Final Jewelry Design"
                             className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
                           />

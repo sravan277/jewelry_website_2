@@ -38,9 +38,7 @@ headers = {"Authorization": "Bearer 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"}
 # Jewelry-related keywords for validation
 JEWELRY_KEYWORDS = {
     'jewelry', 'ring', 'necklace', 'chain', 'bracelet', 'earring',
-    'gold', 'jewellery', 'pendant', 'ornament', 'design', 'pattern',
-    'sketch', 'drawing', 'accessory', 'precious', 'metal', 'gem',
-    'stone', 'diamond'
+    'gold', 'jewellery', 'pendant', 'ornament'
 }
 
 # Model paths
@@ -215,14 +213,13 @@ def process_image_request(request, model_type):
 
         # Step 2: Try image-to-text validation (optional)
         caption, error = query_huggingface_api(image_bytes)
+        print(f"Caption received from Hugging Face API: {caption}")  # Added print statement
         if caption and not is_jewelry_related(caption):
             # Log the rejection but don't block if we're not confident
             print(f"Warning: Image may not be jewelry-related. Caption: {caption}")
-            if confidence < 0.3:  # If classifier was also not confident, then reject
-                return jsonify({
-                    "error": "The image does not appear to be jewelry-related",
-                    "caption": caption
-                }), 400
+            return jsonify({"error": "The image does not appear to be jewelry-related",
+                    "caption": caption}), 400
+            
 
         # Step 3: Process image with model
         try:
@@ -270,52 +267,63 @@ def process_image_request(request, model_type):
         print(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred"}), 500
 
-def save_to_database(sketch_image_b64, generated_image_b64, model_type, user_email):
-    """Save processed images to database with user email"""
-    if collection is None:
-        raise Exception("Database connection not available")
-        
-    unique_id = str(uuid.uuid4())
-    record = {
-        "_id": unique_id,
-        "userEmail": user_email,
-        "sketch_image": sketch_image_b64,
-        "generated_image": generated_image_b64,
-        "model_type": model_type,
-        "timestamp": datetime.datetime.utcnow(),
-        "filename": f"{user_email}_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-    }
-    collection.insert_one(record)
-    return unique_id
-
-# MongoDB configuration with error handling
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-DB_NAME = os.getenv('DB_NAME', 'jewelry_website')
-COLLECTION_NAME = 'designs'
-
-def init_mongodb():
-    """Initialize MongoDB connection with error handling"""
-    global client, db, collection
+def save_to_database(sketch_image_b64, generated_image_b64, model_type, email):
+    """Save processed images to user's generatedImages array"""
     try:
-        # Connect with a timeout
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-        # Test the connection
-        client.server_info()
-        
+        # Get MongoDB collection for users
+        client = MongoClient(MONGO_URI)
         db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
+        users_collection = db['users']
+
+        # Create new image entry
+        new_image = {
+            "sketchImage": f"data:image/png;base64,{sketch_image_b64}",
+            "generatedImage": f"data:image/png;base64,{generated_image_b64}",
+            "sketchImageData": sketch_image_b64,
+            "generatedImageData": generated_image_b64,
+            "title": f"{model_type.replace('_', ' ').title()} Design",
+            "description": f"Generated using {model_type} model",
+            "category": model_type,
+            "status": "pending",
+            "createdAt": datetime.datetime.utcnow()
+        }
+
+        # First, check if user exists
+        user = users_collection.find_one({"email": email})
         
-        # Verify collection exists by attempting a simple operation
-        collection.find_one()
-        print(f"Successfully connected to MongoDB at {MONGO_URI}")
-        print(f"Using database: {DB_NAME}, collection: {COLLECTION_NAME}")
-        return True
+        if user:
+            # Update existing user
+            print(f"Found existing user with email: {email}")
+            result = users_collection.update_one(
+                {"email": email},
+                {"$push": {"generatedImages": new_image}}
+            )
+            print(f"Update result: Modified {result.modified_count} document(s)")
+        else:
+            # Create new user if doesn't exist
+            print(f"Creating new user with email: {email}")
+            result = users_collection.insert_one({
+                "email": email,
+                "generatedImages": [new_image],
+                "createdAt": datetime.datetime.utcnow()
+            })
+            print(f"Insert result: Inserted ID {result.inserted_id}")
+
+        # Verify the update
+        updated_user = users_collection.find_one({"email": email})
+        if updated_user and "generatedImages" in updated_user:
+            print(f"Successfully verified. User has {len(updated_user['generatedImages'])} images")
+            return str(updated_user['_id'])
+        else:
+            print("Warning: Could not verify image was saved")
+            return None
+
     except Exception as e:
-        print(f"Error connecting to MongoDB: {str(e)}")
-        client = None
-        db = None
-        collection = None
-        return False
+        print(f"Error saving to database: {str(e)}")
+        traceback.print_exc()  # Print full stack trace
+        raise
+    finally:
+        client.close()
 
 @app.route('/api/upload', methods=['POST'])
 def process_gold():
@@ -332,104 +340,54 @@ def process_gold_gemstone():
     """Endpoint for gold with gemstone jewelry model"""
     return process_image_request(request, "gold_gemstone")
 
-@app.route('/api/images/my-images', methods=['GET'])
-def get_user_images():
-    """Get processed images for a specific user"""
-    app.logger.info('Received request for /api/images/my-images')
-    app.logger.info(f'Request args: {request.args}')
-    
+@app.route('/api/images/<email>', methods=['GET'])
+def get_user_images(email):
+    """Get all generated images for a specific user"""
     try:
-        email = request.args.get('email')
-        if not email:
-            app.logger.error('No email provided')
-            return jsonify({'error': 'Email is required'}), 400
+        client = MongoClient(MONGO_URI)
+        db = client[DB_NAME]
+        users_collection = db['users']
 
-        if collection is None:
-            app.logger.error('Database connection not available')
-            return jsonify({'error': 'Database connection not available'}), 500
-
-        # Get all images for the user from MongoDB
-        query = {'userEmail': email}
-        app.logger.info(f'Querying MongoDB with: {query}')
-        
-        images = list(collection.find(query).sort('timestamp', -1))
-        app.logger.info(f'Found {len(images)} images')
-        
-        # Convert ObjectId and datetime for JSON serialization
-        for image in images:
-            image['_id'] = str(image['_id'])
-            if isinstance(image.get('timestamp'), datetime.datetime):
-                image['timestamp'] = image['timestamp'].isoformat()
-            
-        return jsonify(images)
-
-    except Exception as e:
-        app.logger.error(f'Error in get_user_images: {str(e)}')
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/images/<image_id>/download', methods=['GET'])
-def download_image(image_id):
-    """Download a specific image"""
-    try:
-        image_type = request.args.get('type', 'generated')  # 'generated' or 'sketch'
-        
-        # Find the image in database
-        image_doc = collection.find_one({"_id": image_id})
-        if not image_doc:
-            return jsonify({"error": "Image not found"}), 404
-
-        # Get the appropriate image data
-        image_data = image_doc['generated_image'] if image_type == 'generated' else image_doc['sketch_image']
-        
-        # Convert base64 to bytes
-        image_bytes = base64.b64decode(image_data)
-        
-        # Create file-like object
-        img_io = io.BytesIO(image_bytes)
-        
-        # Generate filename
-        filename = f"{image_doc['filename']}_{image_type}.png"
-        
-        return send_file(
-            img_io,
-            mimetype='image/png',
-            as_attachment=True,
-            download_name=filename
+        # Find user and get their generatedImages array
+        user = users_collection.find_one(
+            {"email": email},
+            {"generatedImages": 1}
         )
 
-    except Exception as e:
-        print(f"Error downloading image: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-@app.route('/api/images/<image_id>', methods=['DELETE'])
-def delete_image(image_id):
-    """Delete an image record from database"""
-    try:
-        # Verify user owns the image
-        user_email = request.args.get('email') or request.args.get('userEmail')
-        if not user_email:
-            return jsonify({"error": "User email not provided"}), 400
-
-        print(f"Attempting to delete image {image_id} for user {user_email}")
-        result = collection.delete_one({"_id": image_id, "userEmail": user_email})
-        
-        if result.deleted_count == 0:
-            print(f"Image {image_id} not found or unauthorized for user {user_email}")
-            return jsonify({"error": "Image not found or unauthorized"}), 404
-            
-        print(f"Successfully deleted image {image_id} for user {user_email}")
-        return jsonify({"message": "Image deleted successfully"})
+        # Return the generatedImages array
+        return jsonify({
+            "success": True,
+            "images": user.get("generatedImages", [])
+        })
 
     except Exception as e:
-        print(f"Error deleting image: {str(e)}")
+        print(f"Error retrieving images: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        client.close()
+
+# MongoDB configuration with error handling
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+DB_NAME = os.getenv('DB_NAME', 'jewelry_website')
 
 if __name__ == '__main__':
     try:
         print("Initializing MongoDB connection...")
-        if not init_mongodb():
-            raise Exception("Failed to initialize MongoDB")
-            
+        # Connect with a timeout
+        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        # Test the connection
+        client.server_info()
+        
+        db = client[DB_NAME]
+        
+        # Verify collection exists by attempting a simple operation
+        db.list_collection_names()
+        print(f"Successfully connected to MongoDB at {MONGO_URI}")
+        print(f"Using database: {DB_NAME}")
+        
         print("Loading AI models...")
         if not load_models():
             raise Exception("Failed to load models")

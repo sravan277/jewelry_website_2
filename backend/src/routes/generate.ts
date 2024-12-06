@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import { auth } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
+import User from '../models/User';
 
 const router = express.Router();
 
@@ -59,6 +60,12 @@ router.post('/image', auth, upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: 'No image file uploaded' });
     }
 
+    // Get user from database
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     // Upload image to Cloudinary
     uploadedFile = req.file;
     const result = await cloudinary.uploader.upload(req.file.path);
@@ -75,12 +82,32 @@ router.post('/image', auth, upload.single('image'), async (req, res) => {
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
 
-    // Get the generated image URL
-    const generatedImageUrl = response.data[0].url;
+    // Get the generated image URL and ensure it exists
+    const generatedImageUrl = response.data[0]?.url;
+    if (typeof generatedImageUrl !== 'string' || !generatedImageUrl) {
+      throw new Error('Failed to generate image: No URL returned from OpenAI');
+    }
+
+    // Add the new images to user's generatedImages array
+    user.generatedImages.push({
+      sketchImage: result.secure_url,
+      generatedImage: generatedImageUrl as string,
+      sketchImageData: Buffer.from([]), // Empty buffer for now
+      generatedImageData: Buffer.from([]), // Empty buffer for now
+      title: req.body.title || 'Untitled Design',
+      description: req.body.description || prompt,
+      category: req.body.category || 'other',
+      status: 'pending',
+      createdAt: new Date()
+    });
+
+    // Save the updated user
+    await user.save();
 
     res.json({
       originalImage: result.secure_url,
       generatedImage: generatedImageUrl,
+      design: user.generatedImages[user.generatedImages.length - 1]
     });
   } catch (error: any) {
     // Clean up temporary file if it exists

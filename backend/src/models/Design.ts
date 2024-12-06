@@ -6,6 +6,8 @@ export interface IDesign extends mongoose.Document {
   category: string;
   sketchImage: string;
   generatedImage: string;
+  sketchImageData: Buffer;
+  generatedImageData: Buffer;
   sketchCloudinaryId: string;
   generatedCloudinaryId: string;
   user: mongoose.Types.ObjectId;
@@ -34,9 +36,17 @@ const designSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    sketchImageData: {
+      type: Buffer,
+      required: false,
+    },
     generatedImage: {
       type: String,
       required: true,
+    },
+    generatedImageData: {
+      type: Buffer,
+      required: false,
     },
     sketchCloudinaryId: {
       type: String,
