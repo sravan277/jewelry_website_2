@@ -1,99 +1,58 @@
 import express from 'express';
 import multer from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
-import OpenAI from 'openai';
 import { auth } from '../middleware/auth';
-import fs from 'fs';
-import path from 'path';
+import axios from 'axios';
+import FormData from 'form-data';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() }); // Use memory storage for proxying
 
-// Configure OpenAI
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is not set');
-}
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Configure multer for file upload
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
-      return cb(new Error('Only image files are allowed!'));
-    }
-    cb(null, true);
-  },
-});
-
-// Generate image route
-router.post('/image', auth, upload.single('image'), async (req, res) => {
-  let uploadedFile = null;
+// This function forwards the request to the Python ML service
+const forwardToMlService = async (req: express.Request, res: express.Response, modelType: string) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No image file uploaded' });
+      return res.status(400).json({ error: 'No image file provided.' });
     }
 
-    // Upload image to Cloudinary
-    uploadedFile = req.file;
-    const result = await cloudinary.uploader.upload(req.file.path);
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: req.file.originalname });
+    form.append('model_type', modelType);
 
-    // Generate image using DALL-E
-    const prompt = req.body.prompt || 'Transform this jewelry sketch into a realistic, detailed 3D render';
-    const response = await openai.images.generate({
-      model: "dall-e-2",
-      prompt: `${prompt}. The image should be a photorealistic jewelry design based on this sketch: ${result.secure_url}`,
-      n: 1,
-      size: "1024x1024",
+    // Call the Python Flask server
+    const flaskResponse = await axios.post('http://localhost:4000/api/generate', form, {
+      headers: form.getHeaders(),
+      responseType: 'arraybuffer', // Important for receiving an image
     });
 
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path);
+    // Send the generated image back to the frontend
+    res.set('Content-Type', 'image/png');
+    res.send(flaskResponse.data);
 
-    // Get the generated image URL
-    const generatedImageUrl = response.data[0].url;
-
-    res.json({
-      originalImage: result.secure_url,
-      generatedImage: generatedImageUrl,
-    });
   } catch (error: any) {
-    // Clean up temporary file if it exists
-    if (uploadedFile && fs.existsSync(uploadedFile.path)) {
-      fs.unlinkSync(uploadedFile.path);
-    }
-
-    console.error('Image generation error:', error);
-    res.status(500).json({
-      message: 'Error generating image',
-      error: error.message,
-    });
+    console.error(`Error forwarding to ML service for model ${modelType}:`, error.message);
+    res.status(500).json({ error: 'Error generating image via ML service.' });
   }
+};
+
+// Create routes that match what the frontend is calling
+// POST /api/upload/
+router.post('/', auth, upload.single('file'), (req, res) => {
+  forwardToMlService(req, res, 'gold');
+});
+
+// POST /api/upload/silver
+router.post('/silver', auth, upload.single('file'), (req, res) => {
+  forwardToMlService(req, res, 'silver');
+});
+
+// POST /api/upload/paper-sketch
+router.post('/paper-sketch', auth, upload.single('file'), (req, res) => {
+  forwardToMlService(req, res, 'paper_sketch');
+});
+
+// POST /api/upload/gold-gemstone
+router.post('/gold-gemstone', auth, upload.single('file'), (req, res) => {
+  forwardToMlService(req, res, 'gold_gemstone');
 });
 
 export default router;

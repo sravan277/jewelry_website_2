@@ -1,9 +1,7 @@
 import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import bcrypt from 'bcryptjs';
 import User, { IUser } from '../models/User';
 import { generateToken } from '../middleware/auth';
-import { Types } from 'mongoose';
 
 const router = express.Router();
 
@@ -116,7 +114,7 @@ router.post(
       if (!isPasswordValid) {
         return res.status(401).json({
           status: 'error',
-          message: 'Invalid password'
+          message: 'Invalid email or password'
         });
       }
 

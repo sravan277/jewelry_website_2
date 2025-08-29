@@ -76,8 +76,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({ email: user.email });
     } catch (error: any) {
       console.error('Register error:', error);
-      throw new Error(error.response?.data?.message || 'Registration failed');
+      if (error.response?.data?.errors) {
+        const errorMessages = error.response.data.errors.map((err: any) => err.msg).join('. ');
+        throw new Error(errorMessages);
+      }
+      
+      // Then check for other specific backend messages (like "Email is already registered")
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+  
+      // Fallback for generic errors
+      throw new Error('Registration failed. Please try again.');
+
     }
+
+
   };
 
   const logout = () => {

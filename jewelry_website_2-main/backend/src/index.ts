@@ -3,8 +3,7 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
-import mongoose from 'mongoose';
-import { v2 as cloudinary } from 'cloudinary';
+import connectDB from './config/database';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -13,6 +12,7 @@ import userRoutes from './routes/users';
 import contactRoutes from './routes/contact';
 import generateRoutes from './routes/generate';
 
+connectDB();
 // Initialize Express app
 const app = express();
 
@@ -20,25 +20,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Connect to MongoDB
-const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jewelry_website';
-
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-  });
 
 // Routes
 app.use('/api/auth', authRoutes);

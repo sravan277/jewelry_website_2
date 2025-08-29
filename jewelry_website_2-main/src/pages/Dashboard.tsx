@@ -6,15 +6,18 @@ import { useAuth } from '../context/AuthContext';
 
 interface ImageRecord {
   _id: string;
-  sketch_image: string;
-  generated_image: string;
-  timestamp: string;
-  email?: string;
+  sketchImage: string; // Correct: camelCase
+  generatedImage: string; // Correct: camelCase
+  createdAt: string; // The backend provides this via timestamps
+  // email is not part of the design model, it's on the populated user
 }
+// Inside Dashboard.tsx component
 
+ // Add 'token' here
 const Dashboard: React.FC = () => {
+  const { user, token } = useAuth();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // const { user } = useAuth();
   const [images, setImages] = useState<ImageRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,27 +29,27 @@ const Dashboard: React.FC = () => {
   }, [user]);
 
   const fetchUserImages = async () => {
-    if (!user?.email) {
+    if (!user || !token) { // Check for token as well
       setError('Please log in to view your images');
       setIsLoading(false);
       return;
     }
-
+  
     try {
-      const response = await fetch(`http://localhost:4000/api/images/my-images?email=${encodeURIComponent(user.email)}`);
+      // Remove the email query parameter, it's not needed.
+      const response = await fetch('http://localhost:5000/api/designs/my-designs', {
+        headers: { // Add the Authorization header
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
+      // ... rest of the function is okay
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch images');
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch images');
       }
-
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setImages(data);
-        setError(null);
-      } else {
-        throw new Error('Invalid response format');
-      }
+      setImages(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error loading images. Please try again later.';
       setError(errorMessage);
@@ -57,11 +60,15 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDelete = async (imageId: string) => {
-    if (!user?.email) return;
-
+    if (!user || !token) return;
+  
     try {
-      const response = await fetch(`http://localhost:4000/api/images/${imageId}?email=${encodeURIComponent(user.email)}`, {
-        method: 'DELETE'
+      // Remove the email query parameter here too
+      const response = await fetch(`http://localhost:5000/api/designs/${imageId}`, {
+        method: 'DELETE',
+        headers: { // Add the Authorization header
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (!response.ok) {
@@ -196,7 +203,7 @@ const Dashboard: React.FC = () => {
                       className="relative overflow-hidden"
                     >
                       <img
-                        src={`data:image/png;base64,${image.sketch_image}`}
+                        src={image.sketchImage} 
                         alt="Original sketch"
                         className="w-full h-full object-cover cursor-pointer"
                         onClick={() => setSelectedImage(image)}
@@ -216,7 +223,7 @@ const Dashboard: React.FC = () => {
                       className="relative overflow-hidden"
                     >
                       <img
-                        src={`data:image/png;base64,${image.generated_image}`}
+                          src={image.generatedImage} // Use the URL directly
                         alt="Generated design"
                         className="w-full h-full object-cover cursor-pointer"
                         onClick={() => setSelectedImage(image)}
@@ -233,7 +240,7 @@ const Dashboard: React.FC = () => {
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => downloadImage(image.generated_image, 'generated')}
+                        onClick={() => downloadImage(image.generatedImage, 'generated')}
                         className="p-1.5 bg-purple-500/20 rounded-full hover:bg-purple-500/40 transition-all duration-300"
                       >
                         <FiDownload className="w-4 h-4 text-purple-400" />
@@ -339,12 +346,12 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-2">
                   <p className="text-sm text-gray-400">Original Sketch</p>
                   <img
-                    src={`data:image/png;base64,${selectedImage.sketch_image}`}
+                    src={`data:image/png;base64,${selectedImage.sketchImage}`}
                     alt="Original sketch"
                     className="w-full rounded-lg"
                   />
                   <button
-                    onClick={() => downloadImage(selectedImage.sketch_image, 'sketch')}
+                    onClick={() => downloadImage(selectedImage.sketchImage, 'sketch')}
                     className="w-full py-2 px-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <FiDownload className="w-4 h-4" />
@@ -354,12 +361,12 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-2">
                   <p className="text-sm text-gray-400">Generated Design</p>
                   <img
-                    src={`data:image/png;base64,${selectedImage.generated_image}`}
+                    src={`data:image/png;base64,${selectedImage.generatedImage}`}
                     alt="Generated design"
                     className="w-full rounded-lg"
                   />
                   <button
-                    onClick={() => downloadImage(selectedImage.generated_image, 'generated')}
+                    onClick={() => downloadImage(selectedImage.generatedImage, 'generated')}
                     className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <FiDownload className="w-4 h-4" />

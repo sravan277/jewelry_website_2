@@ -16,6 +16,8 @@ const Generate: React.FC = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const [selection, setSelection] = useState('gold'); 
+  // In Generate.tsx, with your other useState hooks
+const [isSaving, setIsSaving] = useState(false);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -56,78 +58,56 @@ const Generate: React.FC = () => {
       if (!image) {
         throw new Error('Please upload an image first');
       }
-
       if (!user?.email) {
         throw new Error('Please log in to generate designs');
       }
 
-      console.log('Selected model:', selection);
+      // --- MODIFICATION START ---
+      // Dynamically set the URL based on the user's selection
+      let endpoint = 'http://localhost:5000/api/generate';
+      if (selection === 'silver') {
+        endpoint += '/silver';
+      } else if (selection === 'gold-gemstone') {
+        endpoint += '/gold-gemstone';
+      } else if (selection === 'paper-sketch') {
+        endpoint += '/paper-sketch';
+      }
+      // 'gold' uses the base '/' route, so no extra path is needed.
       
-      // Send image to backend
-      const serverUrl =
-        selection === 'gold'
-          ? 'http://localhost:4000/api/upload'
-          : selection === 'silver'
-          ? 'http://localhost:4000/api/upload/silver'
-          : selection === 'paper-sketch'
-          ? 'http://localhost:4000/api/upload/paper-sketch'
-          : 'http://localhost:4000/api/upload/gold-gemstone';
-      
-      console.log('Sending request to:', serverUrl);
+      console.log('Sending request to Node.js server at:', endpoint);
 
       const formData = new FormData();
       formData.append('file', image);
-      const userEmail = localStorage.getItem('userEmail');
-      if (!userEmail) {
-        throw new Error('User email not found. Please try logging in again.');
-      }
-      formData.append('email', userEmail);
+      // No longer need to send 'model_type' or 'email' in the form data for this request
+      // The Python service gets model_type from the Node.js service directly.
 
-      const response = await fetch(serverUrl, {
+      const response = await fetch(endpoint, { // Use the dynamic endpoint URL
+      // --- MODIFICATION END ---
         method: 'POST',
         headers: {
+          // The browser correctly sets Content-Type for FormData
           'Authorization': `Bearer ${token}`
         },
         body: formData,
       });
 
       if (!response.ok) {
-        // Try to parse error message if available
-        try {
-          const errorData = await response.json();
-          const errorMessage = errorData.error || '';
-          
-          // Check for specific errors
-          if (errorMessage.toLowerCase().includes('high demand') || 
-              errorMessage.toLowerCase().includes('rate limit') || 
-              errorMessage.toLowerCase().includes('resource_exhausted')) {
-            throw new Error('Our service is experiencing high demand. Please try again in about an hour, or try a different model type.');
-          } else if (errorMessage.includes('missing 2 required positional arguments')) {
-            throw new Error('There was an error with your user information. Please try logging out and back in.');
-          } else if (errorMessage.toLowerCase().includes('no model') || 
-                     errorMessage.toLowerCase().includes('model not available')) {
-            throw new Error('The selected model is currently unavailable. Please try a different model type or contact support if the issue persists.');
-          }
-          
-          throw new Error(errorMessage || 'Failed to generate design');
-        } catch (jsonError) {
-          if (jsonError instanceof Error) {
-            throw jsonError; // Re-throw our custom error messages
-          }
-          throw new Error(`Failed to generate design: ${response.statusText}`);
-        }
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Request failed with status: ${response.statusText}`);
       }
 
-      // Check content type to ensure we received an image
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('image/')) {
-        throw new Error('Server did not return an image');
+        throw new Error('Server did not return a valid image');
       }
 
-      // Convert response to blob and create URL
       const blob = await response.blob();
       const generatedImageUrl = URL.createObjectURL(blob);
       setGeneratedImage(generatedImageUrl);
+
+      await saveDesign(image, blob); 
+
+
     } catch (err) {
       console.error('Generation error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred during generation');
@@ -135,6 +115,50 @@ const Generate: React.FC = () => {
       setIsGenerating(false);
     }
   };
+  // In Generate.tsx
+
+const saveDesign = async (sketchFile: File, generatedBlob: Blob) => {
+  if (!token) {
+    throw new Error("Authentication error. Please log in again.");
+  }
+  
+  setIsSaving(true);
+  setError(null); // Clear previous errors
+  const formData = new FormData();
+
+  // Append all the fields your backend /api/designs endpoint expects
+  formData.append('sketchImage', sketchFile);
+  formData.append('generatedImage', generatedBlob, 'generated-design.png');
+  formData.append('title', `AI Design - ${new Date().toLocaleString()}`);
+  formData.append('description', prompt || "No description provided.");
+  formData.append('category', 'other'); // Hardcoded category
+
+  try {
+    const response = await fetch('http://localhost:5000/api/designs', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to save the design.');
+    }
+
+    console.log("Design saved successfully!");
+    // The 'isSaving' state will be set to false in the 'finally' block
+
+  } catch (err) {
+      // Set the error state to give user feedback
+      const message = err instanceof Error ? err.message : 'An error occurred while saving.';
+      setError(message);
+      console.error('Save design error:', err);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleDownload = async () => {
     if (generatedImage) {
@@ -396,7 +420,7 @@ const Generate: React.FC = () => {
                   </div>
                   <motion.button
                     onClick={handleGenerate}
-                    disabled={!image || isGenerating}
+                    disabled={!image || isGenerating || isSaving}
                     className={`w-full py-4 px-6 rounded-xl font-medium transition-all relative overflow-hidden ${
                       !image || isGenerating
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -409,6 +433,12 @@ const Generate: React.FC = () => {
                       <div className="flex items-center justify-center space-x-3">
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>Creating your masterpiece...</span>
+                      </div>
+                    ) :
+                    isSaving ? ( // Add this block for saving feedback
+                      <div className="flex items-center justify-center space-x-3">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Saving to Dashboard...</span>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center space-x-3">

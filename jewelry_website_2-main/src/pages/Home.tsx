@@ -89,10 +89,11 @@ const Home = () => {
   ];
   
   return (
-    <AnimatePresence mode="wait">
-      {isRedirecting && <LoadingScreen />}
+<AnimatePresence mode="wait">
+      {isRedirecting && <LoadingScreen key="loading" />} {/* Add key="loading" */}
       {isLoaded && (
         <motion.div
+          key="content" // Add key="content"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

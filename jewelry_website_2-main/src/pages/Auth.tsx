@@ -4,12 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import AuthForm from '../components/AuthForm';
 import { useAuth } from '../context/AuthContext';
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 
-interface GoogleCredentialResponse {
-  credential: string;
-}
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -57,70 +52,36 @@ const Auth = () => {
     try {
       if (isLogin) {
         await login(data.email as string, data.password as string);
+        toast.success('Login successful');
         localStorage.setItem('userEmail', data.email);
         navigate('/dashboard');
       } else {
         if (data.password !== data.confirmPassword) {
           setLoginError('Passwords do not match');
+          toast.error('Passwords do not match');
           setShakeAnimation(true);
           setTimeout(() => setShakeAnimation(false), 500);
           return;
         }
         await register(data.email as string, data.password as string, data.name as string);
+        toast.success('Registration successful');
         localStorage.setItem('userEmail', data.email);
         navigate('/dashboard');
       }
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'An error occurred');
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      toast.error(errorMessage);
       setShakeAnimation(true);
+      
       setTimeout(() => setShakeAnimation(false), 500);
     } finally {
       setIsAuthenticating(false);
     }
   };
 
-  const handleGoogleLoginSuccess = async (credentialResponse: GoogleCredentialResponse) => {
-    try {
-      setLoginError('');
-      setIsAuthenticating(true);
-  
-      const response = await fetch('http://localhost:5000/api/auth/google-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ googleToken: credentialResponse.credential }),
-      });
 
-      const data = await response.json();
 
-      if (response.ok) {
-        const decoded = jwtDecode<{email: string}>(credentialResponse.credential);
-        await login(decoded.email, data.token); 
-        localStorage.setItem('userEmail', decoded.email);
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
-      }else {
-        setLoginError(data.message || 'Google login failed. Please try again.');
-        setShakeAnimation(true);
-        setTimeout(() => setShakeAnimation(false), 500);
-      }
-    } catch (error) {
-      setLoginError('An error occurred with Google login.');
-      setShakeAnimation(true);
-      setTimeout(() => setShakeAnimation(false), 500);
-      console.error('Error:', error);
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  const handleGoogleLoginFailure = () => {
-    setLoginError('Google Login Failed. Please try again.');
-    setIsAuthenticating(false);
-    setShakeAnimation(true);
-    setTimeout(() => setShakeAnimation(false), 500);
-    console.error('Google Login Failed');
-  };
   return (
     <div className="min-h-screen pt-20 pb-12 flex flex-col bg-gray-50">
       <Toaster position="top-right" />
